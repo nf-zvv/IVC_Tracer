@@ -1,13 +1,21 @@
 ;------------------------------------------------------------------------------
 ; Автоматическое снятие ВАХ солнечного модуля
 ; 
+; (C) 2017-2020 Vitaliy Zinoviev
+; https://github.com/nf-zvv/IVC_Tracer
+;
+; History
+; =======
 ; 04.12.18 Заменен АЦП на MCP3204, написаны соответствующие подпрограммы
 ; 06.12.18 Добавлена проверка наличия в EEPROM корректного числа
 ; 01.03.20 Вывод значений тока и напряжения изучамого ФЭП в натуральных единицах
 ; 01.03.20 Упрощен и улучшен код для работы с EEPROM
 ; 02.03.20 Добавлена возможность прямого (от ХХ к КЗ) и обратного (от КЗ к ХХ) 
 ;          хода ЦАП при автоматическом снятии ВАХ
+; 
 ;------------------------------------------------------------------------------
+
+#define F_CPU (11059200)
 
 ;.DEVICE ATmega16A
 .NOLIST
@@ -15,50 +23,13 @@
 .include "macro.asm"
 .include "eeprom_macro.asm"
 .include "LCD4_macro.inc"
+.include "uart_macro.asm"
 .LIST
 
 .LISTMAC ; Включить разворачивание макросов
 
-#define F_CPU (11059200)
 
 
-
-
-;USART INIT
-			.MACRO	USART_INIT
-			.equ XTAL 			= F_CPU
-			.equ baudrate 		= 19200
-			.equ bauddivider 	= XTAL/(16*baudrate)-1
-			#if defined(__ATmega328P__) || defined(__ATmega1284P__)
-			ldi		r16,low(bauddivider)
-			OutReg 	UBRR0L,r16
-			ldi		r16,high(bauddivider)
-			OutReg 	UBRR0H,r16
-			ldi		r16,0
-			OutReg 	UCSR0A,r16
-			ldi		r16,(1<<RXEN0)|(1<<TXEN0)|(1<<RXCIE0)|(1<<TXCIE0)|(0<<UDRIE0) ; Прерывание на прием и передачу разрешено, прием-передача разрешены
-			OutReg 	UCSR0B,r16
-			; Формат кадра - 8 бит данных, 1 стоп-бит
-			ldi		r16,(0<<USBS0)|(3<<UCSZ00)
-			OutReg 	UCSR0C,r16
-			#elif defined(__ATmega16A__) || defined(__ATmega16__)
-			ldi		r16,low(bauddivider)
-			OutReg	UBRRL,r16
-			ldi		r16,high(bauddivider)
-			OutReg	UBRRH,r16
-			ldi		r16,0
-			OutReg	UCSRA,r16
-			ldi		r16,(0<<RXEN)|(1<<TXEN)|(0<<RXCIE)|(0<<TXCIE)|(0<<UDRIE) ; Прерывание на прием и передачу разрешено, прием-передача разрешены
-			OutReg	UCSRB,r16
-			; Формат кадра - 8 бит данных, 1 стоп-бит
-			; Без установки бита URSEL приемо-передатчик не работал
-			; URSEL всегда равен 1. Служит для выбора регистра UCSRC, иначе UBRRH.
-			ldi		r16,(1<<URSEL)|(0<<USBS)|(1<<UCSZ1)|(1<<UCSZ0)
-			OutReg	UCSRC,r16
-			#else
-			#error "Unsupported part:" __PART_NAME__
-			#endif // part specific code
-			.ENDM
 
 ;------------------------------------------------------------------------------
 ; Глобальные регистры
@@ -82,10 +53,10 @@
 .equ btn_long_press = 3
 .equ update         = 4
 ;-------------------------------------------
-;.equ UART_IN_FULL   = 0		; Приемный буфер UART полон
+.equ UART_IN_FULL   = 0		; Приемный буфер UART полон
 ;.equ UART_OUT_FULL  = 1		; Буфер отправки UART полон
-;;.equ UART_STR_RCV   = 2		; Получена строка по UART
-;.equ UART_CR        = 3		; Флаг получения кода CR (0x0D) возврат каретки
+.equ UART_STR_RCV   = 2		; Получена строка по UART
+.equ UART_CR        = 3		; Флаг получения кода CR (0x0D) возврат каретки
 ;-------------------------------------------
 ;.equ adc_ok         = 6
 ;.equ need_adc       = 5
@@ -94,7 +65,6 @@
 
 ; Размеры буферов UART (255 max)
 .equ MAXBUFF_IN	 =	64		; Размер входящего буфера
-.equ MAXBUFF_OUT = 	252		; Размер исходящего буфера
 
 .equ IVC_MAX_RECORDS = 100
 
@@ -200,7 +170,8 @@ DAC:			.byte	2
 DAC_STEP:		.byte	2
 ;------------------------
 ButtonCounter:	.byte	2	; количество тиков при нажатой кнопке энкодера
-Flags:			.byte	1	; 
+Flags:			.byte	1	; флаги для энкодера
+UART_Flags:		.byte	1	; флаги для UART
 ;------------------------
 IVC_DAC_START:	.byte	2
 IVC_DAC_END:	.byte	2
@@ -231,7 +202,7 @@ rjmp	RESET
 ;------------------------------------------------------------------------------
 ; Обработчик UART
 ;------------------------------------------------------------------------------
-;.include "uart_irq.asm"
+.include "uart_irq.asm"
 
 ;------------------------------------------------------------------------------
 ;           Прерывание таймера T0 по переполнению
@@ -473,6 +444,7 @@ RESET:
 			out 	PORTD,r16
 
 			sts		Flags,__zero_reg__
+			sts		UART_Flags,__zero_reg__
 
 			;---------------------
 			; Инициализация UART
@@ -507,7 +479,6 @@ RESET:
 			OutReg	TIMSK,r16
 			; Настройка предделителя 64
 			ldi		r16,T0_Clock_Select
-			;ldi		r16,(0<<CS02)|(1<<CS01)|(1<<CS00)
 			OutReg	TCCR0,r16
 			;------------------------------------------------------------------
 
@@ -534,7 +505,7 @@ RESET:
 
 
 			; Инициализация интерпретатора команд UART
-			;rcall	UART_PARSER_INIT
+			call	UART_PARSER_INIT
 
 			; Восстановить переменные из EEPROM
 			rcall	EEPROM_PRELOAD
@@ -577,12 +548,16 @@ main:
 			lds		r16,Flags
 			sbrc	r16,update
 			rcall	UPDATE_ALL
-			;------------------------------
-			;sbrc	Flags,UART_STR_RCV
-			;rcall	UART_RX_PARSE
+
+			lds		r16,UART_Flags
+			sbrc	r16,UART_STR_RCV
+			rcall	UART_RX_PARSE
+
 			; на всякий случай от переполнения входного буфера
-			;sbrc	Flags,UART_IN_FULL
-			;rcall	UART_RX_PARSE
+			lds		r16,UART_Flags
+			sbrc	r16,UART_IN_FULL
+			rcall	UART_RX_PARSE
+
 			rjmp	main
 
 
@@ -1066,9 +1041,6 @@ INC_DAC_STEP_SET:
 			rcall	DEC4_TO_LCD
 INC_DAC_STEP_EXIT:
 			ret
-
-;.include "uart_funcs.asm"
-
 
 
 ;------------------------------------------------------------------------------
@@ -1678,52 +1650,22 @@ BCD_TO_LCD_2:
 			ret
 
 
-;------------------------------------------------------------------------------
-; Send null-terminated string to UART
-;
-; USED: r16*, X*
-; CALL: uart_snt
-; IN: X - pointer to null-terminated string
-; OUT: -
-;------------------------------------------------------------------------------
-STRING_TO_UART:
-			ld		r16,X+
-			tst		r16
-			breq	STRING_TO_UART_END	; end of string
-			; Send data
-			rcall	uart_snt
-			rjmp	STRING_TO_UART
-STRING_TO_UART_END:
-			ret
-
-
-;-----------------------------------------------
-; UART SENT
-;     отправка числа в UART
-; используемые регистры - r16 (не изм.)
-; входной регистр - r16
-; выходной регистр - нет
-;-----------------------------------------------
-uart_snt:
-			SBIS 	UCSRA,UDRE		; Пропуск если нет флага готовности
-			RJMP	uart_snt 		; ждем готовности - флага UDRE
- 			OUT		UDR,r16		; шлем байт!
-			RET
-
 
 
 .include "math.asm"
 .include "LCD4.asm"
-
-;.include "strings.asm"
-;.include "cmd.asm"
-;.include "cmd_func.asm"
 
 .include "spi_hw.asm"
 .include "MCP3204.asm"
 .include "MCP4921.asm"
 .include "wait.asm"
 .include "eeprom.asm"
+
+.include "uart_funcs.asm"
+.include "strings.asm"
+.include "cmd.asm"
+.include "cmd_func.asm"
+
 
 DAC_step_const:			.db "DAC step",0,0
 IVC_DAC_start_const:	.db "IVC DAC start",0

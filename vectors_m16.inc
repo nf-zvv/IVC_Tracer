@@ -21,16 +21,13 @@ rjmp	OVF0_IRQ
 .org	SPIaddr		;SPI Interrupt
 reti
 .org	URXCaddr	;UART Receive Complete Interrupt
-;rjmp	RX_OK
-reti
+rjmp	RX_OK
 .org	UDREaddr	;UART Data Register Empty Interrupt
-;rjmp	UD_OK
 reti
 .org	UTXCaddr	;UART Transmit Complete Interrupt
-;rjmp	TX_OK
 reti
 .org	ADCCaddr	;ADC Interrupt
-reti	;rjmp	ADC_IRQ
+reti
 .org	ERDYaddr	;EEPROM Interrupt
 reti
 .org	ACIaddr		;Analog Comparator Interrupt
