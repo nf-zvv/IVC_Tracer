@@ -183,7 +183,7 @@ ADC_V_REF:		.byte	2
 ACS712_KI:		.byte	1
 ;------------------------
 ; Zero-ended string
-STRING:			.byte	20
+STRING:			.byte	30
 ;------------------------
 IVC_ARRAY:		.byte	2*2*IVC_MAX_RECORDS
 ;------------------------

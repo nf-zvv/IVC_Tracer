@@ -13,14 +13,15 @@
 ; 07.06.2018 ADD: подпрограмма ZEROING_BUFF - обнуление буфера
 ; 08.06.2018 ADD: отдельная подпрограмма вывода ошибок по коду ошибки
 ; 09.03.2020 
-; 
+; 10.03.2020 косметические исправления
+;            SPLIT_ARGS переименована в SPLIT_LINE
 ;==============================================================================
 
 .ifndef __zero_reg__
 .def __zero_reg__ = r2
 .endif
 
-.equ	CMD_COUNT     = 4			; кол-во команд. Увеличить при добавлении новых!
+.equ	CMD_COUNT     = 6			; кол-во команд. Увеличить при добавлении новых!
 .equ	ARG_COUNT_MAX = 2			; максимальное кол-во аргументов
 .equ	CMDLINE_LEN   = 32
 
@@ -41,18 +42,18 @@ CMDLINE:		.byte	CMDLINE_LEN		; обработанная командная строка
 ;------------------------------------------------------------------------------
 ; Распознавание введенной строки, ее исполнение, 
 ;   выдача сообщения об успехе или провале
-; Вызовы: SPLIT_ARGS, DEFINE_CMD, EXEC_CMD, UART_OK, FLASH_CONST_TO_UART
+; Вызовы: SPLIT_LINE, DEFINE_CMD, EXEC_CMD, UART_OK, FLASH_CONST_TO_UART
 ; Используются: r13, r16*, Z*
 ; Вход: 
 ; Выход: 
 ;------------------------------------------------------------------------------
 UART_RX_PARSE:
 			CLFL	UART_Flags,UART_STR_RCV	; сброс флага
-			rcall	SPLIT_ARGS		; разбивка входной строки
+			rcall	SPLIT_LINE		; разбивка входной строки
 			tst		r13
-			breq	SPLIT_ARGS_OK
+			breq	SPLIT_LINE_OK
 			rjmp	PRINT_ERROR
-SPLIT_ARGS_OK:
+SPLIT_LINE_OK:
 			rcall	DEFINE_CMD
 			tst		r13
 			breq	DEFINE_CMD_OK
@@ -92,8 +93,8 @@ PRINT_ERROR:
 error_1:
 			cpi		r16,1
 			brne	error_2
-			ldi		ZL,low(split_args_fail_const*2)
-			ldi		ZH,high(split_args_fail_const*2)
+			ldi		ZL,low(SPLIT_LINE_fail_const*2)
+			ldi		ZH,high(SPLIT_LINE_fail_const*2)
 			rjmp	print_error_
 error_2:
 			cpi		r16,2
@@ -152,7 +153,7 @@ PRINT_ERROR_EXIT:
 ;        r13 = 0 - ok
 ;        r13 = 1 - ложный вызов
 ;-----------------------------------------------------------------------------
-SPLIT_ARGS:
+SPLIT_LINE:
 			; обнуление буферов
 			ldi		r16,ARG_COUNT_MAX
 			ldi		YL,low(ARG_ADDR_LIST)
@@ -172,10 +173,10 @@ SPLIT_ARGS:
 			ldi		XH,high(CMDLINE)
 			ldi		YL,low(ARG_ADDR_LIST)	; буфер смещений аргуметов
 			ldi		YH,high(ARG_ADDR_LIST)
-SPLIT_ARGS_LOOP:
+SPLIT_LINE_LOOP:
 			rcall	Buff_Pop		; извлекаем символ из входного буфера UART
 			cpi		r19,1			; если статус 1, то буфер пуст
-			breq	EMPTY_BUFFER	; значит, выходим
+			breq	SPLIT_LINE_END	; значит, выходим
 			; получили первый символ (он находится в r16)
 			; Проверяем на принадлежность к печатаемым знакам
 			mov		r17,r16
@@ -196,39 +197,48 @@ is_arg_start:
 skip_arg_start:
 			mov		r14,r17		; предыдущим становится текущий
 			inc		r18			; увеличиваем счетчик символов
-			rjmp	SPLIT_ARGS_LOOP
+			rjmp	SPLIT_LINE_LOOP
 _nonchar:
 			cpi		r17,0x20
 			breq	space_rcv
 			cpi		r17,13		; символ конца командной строки
 			breq	enter_rcv
-			rjmp	SPLIT_ARGS_LOOP
+			rjmp	SPLIT_LINE_LOOP
 space_rcv:
 			tst		r14					; если пробел в самом начале (r14=0)
-			breq	SPLIT_ARGS_LOOP		; - следующая итерация
+			breq	SPLIT_LINE_LOOP		; - следующая итерация
 			ldi		r16,0x20
 			cp		r14,r16			; если пробел после пробела (r14=0x20)
-			breq	SPLIT_ARGS_LOOP		; - следующая итерация
+			breq	SPLIT_LINE_LOOP		; - следующая итерация
 			clr		r16
 			st		X+,r16		; записываем 0 как символ конца аргумента
 			mov		r14,r17		; предыдущим становится пробел
 			inc		r18			; увеличиваем счетчик
-			rjmp	SPLIT_ARGS_LOOP
+			rjmp	SPLIT_LINE_LOOP
 enter_rcv:
 			tst		r18					; проверяем счетчик
-			brne	split_args_success		; разбор строки успешен
+			brne	SPLIT_LINE_success		; разбор строки успешен
 			; нажали enter в самом начале - выходим
 			; но установим статус ложного вызова:
 			ldi		r16,1
 			mov		r13,r16
-			rjmp	SPLIT_ARGS_LOOP
-split_args_success:
+			rjmp	SPLIT_LINE_LOOP
+SPLIT_LINE_success:
 			; иначе - enter нажат в конце командной строки
 			; добавим ноль - признак конца строки вместо enter'а
 			st		X+,__zero_reg__		; записываем 0 как символ конца строки
 			clr		r13
-			rjmp	SPLIT_ARGS_LOOP
+			;rjmp	SPLIT_LINE_LOOP
+			; 10.03.2020 закомментировал строку выше:
+			; зачем возвращаться, если уже получен enter?
+			; только если с целью полностью опустошить буфер
+			; Возможно здесь баг
+			; Тогда надо опустошить буфер
+			; А если по какой-то причине в буфере что-то есть, 
+			; но enter не пришел? Например, при переолнении входящего буфера.
+			; В любом случае надо опустошать буфер по завершении этой подпрограммы
 EMPTY_BUFFER:
+SPLIT_LINE_END:
 			ret
 
 
@@ -280,8 +290,8 @@ DEF_CMD_LOOP:
 			tst		r16				; результат проверки
 			breq	CMD_FOUND		; если равны - переходим
 			inc		r18				; если не равны, увеличиваем счетчик комманд
-			cpi		r18,CMD_COUNT	; кончился ли список команд?
-			brne	DEF_CMD_LOOP	; не кончился, еще итерация
+			cpi		r18,CMD_COUNT	; не кончился ли список команд?
+			brne	DEF_CMD_LOOP	; нет, не кончился, еще итерация
 			rjmp	CMD_NOT_FOUND	; кончился, команда не найдена
 CMD_FOUND:
 			sts		CMD_ID,r18		; сохраняем ID найденной команды
@@ -335,7 +345,7 @@ EXEC_CMD:
 
 ;-----------------------------------------------------------------------------
 ; Перемещает указатель на начало заданного аргумента
-; Изпользует: r2*, r16*, X, Y*
+; Изпользует: r16*, X, Y*
 ; Вход: r16 - номер аргумента, начиная с 1
 ; Выход: Y, указывающий на начало строки аргумента
 ; 07.06.18 ADD: сохранение в стек регистра X
@@ -364,14 +374,14 @@ GET_ARGUMENT:
 ; Constants
 ; 
 ;------------------------------------------------------------------------------
-unknown_cmd_const:			.db "Unknown command",0
-split_args_fail_const:		.db "Split arguments failed",0,0
-cmd_error_const:			.db "Command error",0
-invalid_argument_const:		.db "Invalid argument",0,0
-invalid_arg_count_const:	.db "Invalid argument count",0,0
-too_many_arguments_const:	.db "Too many arguments",0,0
-no_arguments_const:			.db "No arguments",0,0
-unknown_error_const:		.db "Unknown error",0
+unknown_cmd_const:			.db "Unknown command",10,13,0
+SPLIT_LINE_fail_const:		.db "Split arguments failed",10,13,0,0
+cmd_error_const:			.db "Command error",10,13,0
+invalid_argument_const:		.db "Invalid argument",10,13,0,0
+invalid_arg_count_const:	.db "Invalid argument count",10,13,0,0
+too_many_arguments_const:	.db "Too many arguments",10,13,0,0
+no_arguments_const:			.db "No arguments",10,13,0,0
+unknown_error_const:		.db "Unknown error",10,13,0
 
 
 
