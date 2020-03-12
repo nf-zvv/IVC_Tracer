@@ -33,13 +33,15 @@ RX_OK:
 			push	r16
 			push	r17
 			push	r18
+			push	r19
 			push	XL
 			push	XH
 			;----------------
+			; Получаем байт по UART
 			#if defined(__ATmega168__) || defined(__ATmega328P__) || defined(__ATmega1284P__)
-			InReg	r17,UDR0			; Забираем данные
+			InReg	r17,UDR0
 			#elif defined(__ATmega8__) || defined(__ATmega16A__) || defined(__ATmega16__)
-			InReg	r17,UDR				; Забираем данные
+			InReg	r17,UDR
 			#else
 			#error "Unsupported part:" __PART_NAME__
 			#endif // part specific code
@@ -89,6 +91,7 @@ RX_OK_EXIT:
 			;----------------
 			pop		XH
 			pop		XL
+			pop		r19
 			pop		r18
 			pop		r17
 			pop		r16

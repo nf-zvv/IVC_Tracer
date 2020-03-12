@@ -15,7 +15,12 @@
 ; 09.03.2020 
 ; 10.03.2020 косметические исправления
 ;            SPLIT_ARGS переименована в SPLIT_LINE
+; 12.10.2020 Оптимизация. Вместо использования RAM для хранения таблицы 
+;            "имя команды - адрес подпрограммы" теперь используется Flash
 ;==============================================================================
+#ifndef _CMD_ASM_
+#define _CMD_ASM_
+
 
 .ifndef __zero_reg__
 .def __zero_reg__ = r2
@@ -29,9 +34,6 @@
 ;                                                       |
 ;-------------------------------------------------------|
 .dseg
-; массив указателей
-; ссылка на имя команды (2 байта); адрес команды (2 байта)
-CMD_LIST:		.byte	CMD_COUNT*4		; массив указателей
 CMD_ID:			.byte	1				; ID команды в списке CMD_LIST
 ARG_COUNT:		.byte	1				; кол-во переданых аргументов
 ARG_ADDR_LIST:	.byte	ARG_COUNT_MAX	; массив смещений аргументов
@@ -54,6 +56,12 @@ UART_RX_PARSE:
 			breq	SPLIT_LINE_OK
 			rjmp	PRINT_ERROR
 SPLIT_LINE_OK:
+			; === Debug ===
+			ldi		XL,low(CMDLINE)
+			ldi		XH,high(CMDLINE)
+			rcall	STRING_TO_UART
+			rcall	UART_LF_CR
+			; =============
 			rcall	DEFINE_CMD
 			tst		r13
 			breq	DEFINE_CMD_OK
@@ -264,31 +272,36 @@ ZEROING_BUFF:
 ; Записывает в CMD_ID идентификатор обнаруженной команды
 ; 
 ; Вызовы: STR_CMP
-; Используются: r0*, r1*, r13*, r16*, r18*, X*, Z*
-; Вход: CMD_BUFFER, CMD_LIST
+; Используются: r0*, r1*, r13*, r16*, r18*, r24*, r25*, X*, Z*
+; Вход: CMD_TABLE, CMDLINE
 ; Выход: CMD_ID, r13
 ;        r13 = 0 - ok
 ;        r13 = 2 - неизвестная команда
 ;-----------------------------------------------------------------------------
 DEFINE_CMD:
-			clr		r18			; счетчик ID комманд (0 ... (CMD_COUNT-1))
+			clr		r18		; счетчик ID команд (0 ... (CMD_COUNT-1))
 DEF_CMD_LOOP:
-			ldi		XL,low(CMD_LIST)		; Берем адрес начала буффера
-			ldi		XH,high(CMD_LIST)
+			; Загружаем адрес таблицы
+			ldi		ZL,low(CMD_TABLE*2)
+			ldi		ZH,high(CMD_TABLE*2)
+			; Добавляем смещение
 			mov		r0,r18
-			ldi		r16,4	; строка из 4 байт (см. структуру данных в CMD_LIST)
+			ldi		r16,4	; строка из 4 байт
 			mul		r0,r16
-			add		XL,r0
-			adc		XH,r1
-
-			ld		ZH,X+	; теперь Z указывает на имя
-			ld		ZL,X	; команды во Flash памяти
-			ldi		XL,low(CMDLINE)		; буфер с командой, 
+			add		ZL,r0
+			adc		ZH,r1
+			; Извлекаем адрес очередной команды
+			lpm		r24,Z+
+			lpm		r25,Z
+			; Сравниваем полученную по UART команду с известными
+			movw	ZL,r24
+			ldi		XL,low(CMDLINE)		; буфер с командой,
 			ldi		XH,high(CMDLINE)	; принятой по UART
-			rcall	STR_CMP		; сравнить строки
-
+			rcall	STR_CMP
+			; Проверяем, есть ли такая команда
 			tst		r16				; результат проверки
 			breq	CMD_FOUND		; если равны - переходим
+			; Команда не совпала
 			inc		r18				; если не равны, увеличиваем счетчик комманд
 			cpi		r18,CMD_COUNT	; не кончился ли список команд?
 			brne	DEF_CMD_LOOP	; нет, не кончился, еще итерация
@@ -298,45 +311,32 @@ CMD_FOUND:
 			clr		r13		; статус успеха
 			ret
 CMD_NOT_FOUND:
-			ldi		XL,low(CMDLINE)		; буфер с командой, 
-			ldi		XH,high(CMDLINE)	; принятой по UART
-			rcall	RAM_CONST_TO_LCD
 			; команда не найдена
 			ldi		r16,2		; статус "неизвестная команда"
 			mov		r13,r16
 			ret
 
 
-RAM_CONST_TO_LCD:
-			LCDCLR
-			LCD_COORD 0,0
-RAM_CONST_TO_LCD_LOOP:
-			ld		r17,X+
-			tst		r17
-			breq	RAM_CONST_TO_LCD_EXIT
-			rcall	DATA_WR
-			rjmp	RAM_CONST_TO_LCD_LOOP
-RAM_CONST_TO_LCD_EXIT:
-			ret
-
-
 ;-----------------------------------------------------------------------------
 ; Передать управление команде
-; Используются: r0*, r1*, r16*, X*, Z*
+; Используются: r0*, r1*, r16*, r24*, r25*, Z*
 ; Вход: CMD_ID, CMD_LIST
 ; Выход: -
 ;-----------------------------------------------------------------------------
 EXEC_CMD:
-			ldi		XL,low(CMD_LIST)	; Берем адрес начала буффера
-			ldi		XH,high(CMD_LIST)
+			; Загружаем адрес таблицы
+			ldi		ZL,low(CMD_TABLE*2)
+			ldi		ZH,high(CMD_TABLE*2)
 			lds		r0,CMD_ID			; загружаем ID команды
+			; Добавляем смещение
 			ldi		r16,4
 			mul		r0,r16
-			add		XL,r0
-			adc		XH,r1
-			adiw	XL,2	; позиционируемся на адрес подпрограммы
-			ld		ZH,X+	; теперь Z указывает на адрес подпрограммы
-			ld		ZL,X
+			add		ZL,r0
+			adc		ZH,r1
+			adiw	ZL,2	; позиционируемся на адрес подпрограммы
+			lpm		r24,Z+
+			lpm		r25,Z
+			movw	ZL,r24	; теперь Z указывает на адрес подпрограммы
 			ijmp			; косвенный переход к подпрограмме
 			; передаем управление подпрограмме
 			; в конце подпрограммы будет инструкция ret,
@@ -383,7 +383,7 @@ too_many_arguments_const:	.db "Too many arguments",10,13,0,0
 no_arguments_const:			.db "No arguments",10,13,0,0
 unknown_error_const:		.db "Unknown error",10,13,0
 
-
+#endif  /* _CMD_ASM_ */
 
 ;------------------------------------------------------------------------------
 ; End of file

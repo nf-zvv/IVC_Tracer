@@ -137,6 +137,14 @@ UART_OK:
 			ret
 
 
+UART_LF_CR:
+			ldi		r16,10
+			rcall	uart_snt
+			ldi		r16,13
+			rcall	uart_snt
+			ret
+
+
 
 #endif  /* _UART_FUNCS_ASM_ */
 

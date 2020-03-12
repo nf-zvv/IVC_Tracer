@@ -50,22 +50,18 @@
 			; @0 - имя ячейки памяти
 			; @1 - имя флага
 			.MACRO	CLFL
-			cli
-			lds		r16,@0
-			andi	r16,~(1 << @1)
-			sts		@0,r16
-			sei
+			lds		r19,@0
+			andi	r19,~(1 << @1)
+			sts		@0,r19
 			.ENDM
 
 			; Установить флаг
 			; @0 - имя ячейки памяти
 			; @1 - имя флага
 			.MACRO	STFL
-			cli
-			lds		r16,@0
-			ori		r16,(1 << @1)
-			sts		@0,r16
-			sei
+			lds		r19,@0
+			ori		r19,(1 << @1)
+			sts		@0,r19
 			.ENDM
 
 			; Перейти, если флаг установлен
@@ -74,8 +70,8 @@
 			; @1 - имя флага
 			; @2 - метка
 			.MACRO	BRFS
-			lds		r16,@0
-			sbrc	r16,@1
+			lds		r19,@0
+			sbrc	r19,@1
 			rjmp	@2
 			.ENDM
 
@@ -85,8 +81,8 @@
 			; @1 - имя флага
 			; @2 - метка
 			.MACRO	BRFC
-			lds		r16,@0
-			sbrs	r16,@1
+			lds		r19,@0
+			sbrs	r19,@1
 			rjmp	@2
 			.ENDM
 

@@ -16,22 +16,17 @@
 ; 19.02.2018 Подпрограмма fill_cmd_list переименована в init_cmd_list
 ; 12.03.2018 В подпрограмму init_cmd_list добавлено обнуление буферов UART
 ;            Подпрограмма init_cmd_list переименована в UART_PARSER_INIT
-; 
+; 10.03.2020 ADD: SET и GET команды
+; 11.03.2020 CMD_TABLE. Использование Flash вместо RAM
 ;------------------------------------------------------------------------------
+#ifndef _CMD_FUNC_ASM_
+#define _CMD_FUNC_ASM_
 
-; Макрос добавления команды с список доступных команд
-; Использование: ADD_CMD cmd_name_const,cmd_addr
-.MACRO 	ADD_CMD
-			ldi		ZL,low(@0*2)
-			ldi		ZH,high(@0*2)
-			st		X+,ZH
-			st		X+,ZL
-			ldi		ZL,low(@1)
-			ldi		ZH,high(@1)
-			st		X+,ZH
-			st		X+,ZL
-.ENDMACRO
+.dseg
+VAR_ID:		.byte 1
 
+
+.cseg
 ;------------------------------------------------------------------------------
 ; Заполнение массива команд-адресов
 ; Вызовы: -
@@ -47,25 +42,10 @@ UART_PARSER_INIT:
 			;sts		OUT_PTR_S,__zero_reg__
 			;sts		OUT_PTR_E,__zero_reg__
 
-			ldi		XL,low(CMD_LIST)		; Берем адрес начала буфера
-			ldi		XH,high(CMD_LIST)
-
-			ADD_CMD	cmd_clear_const,cmd_clear
-			ADD_CMD	cmd_reboot_const,cmd_reboot
-			ADD_CMD	cmd_echo_const,cmd_echo
-			ADD_CMD	cmd_meow_const,cmd_meow
-			ADD_CMD	cmd_set_const,cmd_set
-			ADD_CMD	cmd_get_const,cmd_get
-			;ADD_CMD	cmd_pwm_const,cmd_pwm
-			;ADD_CMD	cmd_adc_const,cmd_adc
-			;ADD_CMD	cmd_adc2_const,cmd_adc2
-			;ADD_CMD	cmd_dac_const,cmd_dac
-			;ADD_CMD	cmd_vah_const,cmd_vah
-			;ADD_CMD	cmd_start_const,cmd_start
+			; Теперь это бесполезная подпрограмма
 
 			; Не забыть увеличить кол-во команд в переменной CMD_COUNT в файле cmd.asm
 			ret
-
 
 
 ;------------------------------------------------------------------------------
@@ -276,32 +256,36 @@ cmd_get_const:				.db "get",0
 ;cmd_dac_const:				.db "dac",0
 ;cmd_vah_const:				.db "vah",0
 ;cmd_start_const:			.db "start",0
-meow_const:					.db "Meow",0,0
+meow_const:					.db "Meow! ^_^",0
 clear_seq_const:			.db 27, "[", "H", 27, "[", "2J",0
 
 ; Имена переменных
-IVC_DAC_START_const:		.db "IVC_DAC_START",0
-IVC_DAC_END_const:			.db "IVC_DAC_END",0
-IVC_DAC_STEP_const:			.db "IVC_DAC_STEP",0,0
-CH0_DELTA_const:			.db "CH0_DELTA",0
-ADC_V_REF_const:			.db "ADC_V_REF",0
-ACS712_KI_const:			.db "ACS712_KI",0
+IVC_DAC_START_var_name:		.db "IVC_DAC_START",0
+IVC_DAC_END_var_name:		.db "IVC_DAC_END",0
+IVC_DAC_STEP_var_name:		.db "IVC_DAC_STEP",0,0
+CH0_DELTA_var_name:			.db "CH0_DELTA",0
+ADC_V_REF_var_name:			.db "ADC_V_REF",0
+ACS712_KI_var_name:			.db "ACS712_KI",0
 
 ; Таблица адресов имен команд и адресов подпрограмм
-CMD_TABLE:					.db low(cmd_clear_const*2), high(cmd_clear_const*2), low(cmd_clear), high(cmd_clear)
-							.db low(cmd_reboot_const*2),high(cmd_reboot_const*2),low(cmd_reboot),high(cmd_reboot)
-							.db low(cmd_echo_const*2),  high(cmd_echo_const*2),  low(cmd_echo),  high(cmd_echo)
-							.db low(cmd_meow_const*2),  high(cmd_meow_const*2),  low(cmd_meow),  high(cmd_meow)
-							.db low(cmd_set_const*2),   high(cmd_set_const*2),   low(cmd_set),   high(cmd_set)
-							.db low(cmd_get_const*2),   high(cmd_get_const*2),   low(cmd_get),   high(cmd_get)
+CMD_TABLE:
+.db low(cmd_clear_const*2), high(cmd_clear_const*2), low(cmd_clear), high(cmd_clear)
+.db low(cmd_reboot_const*2),high(cmd_reboot_const*2),low(cmd_reboot),high(cmd_reboot)
+.db low(cmd_echo_const*2),  high(cmd_echo_const*2),  low(cmd_echo),  high(cmd_echo)
+.db low(cmd_meow_const*2),  high(cmd_meow_const*2),  low(cmd_meow),  high(cmd_meow)
+.db low(cmd_set_const*2),   high(cmd_set_const*2),   low(cmd_set),   high(cmd_set)
+.db low(cmd_get_const*2),   high(cmd_get_const*2),   low(cmd_get),   high(cmd_get)
 
 ; Таблица адресов имен переменных во Flash и адресов значений в RAM
-VAR_TABLE:					.db low(IVC_DAC_START_const*2),high(IVC_DAC_START_const*2),low(IVC_DAC_START),high(IVC_DAC_START)
-							.db low(IVC_DAC_END_const*2),  high(IVC_DAC_END_const*2),  low(IVC_DAC_END),   high(IVC_DAC_END)
-							.db low(IVC_DAC_STEP_const*2), high(IVC_DAC_STEP_const*2), low(IVC_DAC_STEP),  high(IVC_DAC_STEP)
-							.db low(CH0_DELTA_const*2),    high(CH0_DELTA_const*2),    low(CH0_DELTA),     high(CH0_DELTA)
-							.db low(ADC_V_REF_const*2),    high(ADC_V_REF_const*2),    low(ADC_V_REF),     high(ADC_V_REF)
-							.db low(ACS712_KI_const*2),    high(ACS712_KI_const*2),    low(ACS712_KI),     high(ACS712_KI)
+VAR_TABLE:
+.db low(IVC_DAC_START_var_name*2),high(IVC_DAC_START_var_name*2),low(IVC_DAC_START),high(IVC_DAC_START)
+.db low(IVC_DAC_END_var_name*2),  high(IVC_DAC_END_var_name*2),  low(IVC_DAC_END),  high(IVC_DAC_END)
+.db low(IVC_DAC_STEP_var_name*2), high(IVC_DAC_STEP_var_name*2), low(IVC_DAC_STEP), high(IVC_DAC_STEP)
+.db low(CH0_DELTA_var_name*2),    high(CH0_DELTA_var_name*2),    low(CH0_DELTA),    high(CH0_DELTA)
+.db low(ADC_V_REF_var_name*2),    high(ADC_V_REF_var_name*2),    low(ADC_V_REF),    high(ADC_V_REF)
+.db low(ACS712_KI_var_name*2),    high(ACS712_KI_var_name*2),    low(ACS712_KI),    high(ACS712_KI)
+
+#endif  /* _CMD_FUNC_ASM_ */
 
 ;------------------------------------------------------------------------------
 ; End of file
