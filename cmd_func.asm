@@ -172,7 +172,7 @@ cmd_get_max_arg_tst:
 			rjmp	cmd_too_many_args
 cmd_get_next:
 			ldi		r16,1			; берем первый аргумент
-			rcall	GET_ARGUMENT	; (Y - poimter to zero ending argument string)
+			rcall	GET_ARGUMENT	; (Y - pointer to zero ending argument string)
 			rcall	DEFINE_VAR
 			tst		r13
 			breq	cmd_get_VAR_FOUND
@@ -180,7 +180,29 @@ cmd_get_next:
 			mov		r13,r16
 			ret
 cmd_get_VAR_FOUND:
-			
+			; «агружаем адрес таблицы
+			ldi		ZL,low(CMD_TABLE*2)
+			ldi		ZH,high(CMD_TABLE*2)
+			lds		r0,VAR_ID			; загружаем ID переменной
+			; ƒобавл€ем смещение
+			ldi		r16,4
+			mul		r0,r16
+			add		ZL,r0
+			adc		ZH,r1
+			adiw	ZL,2	; позиционируемс€ на адрес переменной в RAM
+			lpm		XL,Z+
+			lpm		XH,Z	; теперь X указывает на значение переменной в RAM
+			; извлекаем значение
+			ld		r24,X+
+			ld		r25,X
+			movw	XL,r24
+			ldi		YL,low(STRING)
+			ldi		YH,high(STRING)
+			rcall	DEC_TO_STR5 ; (IN: X; OUT: Y)
+			movw	XL,YL
+			rcall	STRING_TO_UART ; (IN: X)
+			rcall	UART_LF_CR
+			clr		r13
 			ret
 
 
@@ -191,7 +213,7 @@ cmd_get_VAR_FOUND:
 ; «аписывает в VAR_ID идентификатор обнаруженной переменной
 ; 
 ; ¬ызовы: STR_CMP
-; »спользуютс€: r0*, r1*, r13*, r16*, r18*, r24*, r25*, X*, Z*
+; »спользуютс€: r0*, r1*, r13*, r16*, r18*, r24*, r25*, X*, Y*, Z*
 ; ¬ход: Y - указатель на им€ полученной переменной
 ; ¬ыход: VAR_ID, r13
 ;        r13 = 0 - ok
@@ -200,6 +222,7 @@ cmd_get_VAR_FOUND:
 .equ	VAR_COUNT     = 6			; кол-во команд. ”величить при добавлении новых!
 DEFINE_VAR:
 			clr		r18			; счетчик ID переменных
+			movw	r24,YL
 DEF_VAR_LOOP:
 			ldi		ZL,low(VAR_TABLE*2)
 			ldi		ZH,high(VAR_TABLE*2)
@@ -208,10 +231,10 @@ DEF_VAR_LOOP:
 			mul		r0,r16
 			add		ZL,r0
 			adc		ZH,r1
-			lpm		r24,Z+
-			lpm		r25,Z
-			movw	ZL,r24
-			movw	XL,YL
+			lpm		YL,Z+
+			lpm		YH,Z
+			movw	ZL,YL
+			movw	XL,r24
 			rcall	STR_CMP
 			tst		r16				; результат проверки
 			breq	VAR_FOUND		; если равны - переходим
@@ -225,7 +248,7 @@ VAR_FOUND:
 			ret
 VAR_NOT_FOUND:
 			; команда не найдена
-			ldi		r16,2		; статус "неизвестна€ команда"
+			ldi		r16,4		; статус "некорректное значение аргумента"
 			mov		r13,r16
 			ret
 

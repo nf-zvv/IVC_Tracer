@@ -211,6 +211,8 @@ _nonchar:
 			breq	space_rcv
 			cpi		r17,13		; символ конца командной строки
 			breq	enter_rcv
+			cpi		r17,'_'
+			breq	underline_rcv
 			rjmp	SPLIT_LINE_LOOP
 space_rcv:
 			tst		r14					; если пробел в самом начале (r14=0)
@@ -230,6 +232,9 @@ enter_rcv:
 			; но установим статус ложного вызова:
 			ldi		r16,1
 			mov		r13,r16
+			rjmp	SPLIT_LINE_LOOP
+underline_rcv:
+			st		X+,r17
 			rjmp	SPLIT_LINE_LOOP
 SPLIT_LINE_success:
 			; иначе - enter нажат в конце командной строки
