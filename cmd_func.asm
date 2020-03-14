@@ -22,6 +22,8 @@
 #ifndef _CMD_FUNC_ASM_
 #define _CMD_FUNC_ASM_
 
+.equ	VAR_COUNT     = 6			; кол-во переменных (для команд SET и GET)
+
 .dseg
 VAR_ID:		.byte 1
 
@@ -173,13 +175,30 @@ cmd_get_max_arg_tst:
 cmd_get_next:
 			ldi		r16,1			; берем первый аргумент
 			rcall	GET_ARGUMENT	; (Y - pointer to zero ending argument string)
-			rcall	DEFINE_VAR
-			tst		r13
-			breq	cmd_get_VAR_FOUND
-			ldi		r16,4	; код ошибки: "некорректное значение аргумента"
-			mov		r13,r16
-			ret
-cmd_get_VAR_FOUND:
+			; Сначала проверяем, не запрошены ли все переменные одновременно
+			movw	XL,YL
+			ldi		ZL,low(ALL_const*2)		; аргумент ALL
+			ldi		ZH,high(ALL_const*2)
+			rcall	STR_CMP
+			tst		r16				; результат проверки
+			brne	cmd_get_single_var
+			; Выдаём все переменные
+			rcall	GET_ALL
+			rjmp	cmd_get_success
+cmd_get_single_var:
+			movw	XL,YL
+			ldi		ZL,low(VAR_TABLE*2)
+			ldi		ZH,high(VAR_TABLE*2)
+			ldi		r19,VAR_COUNT
+			rcall	LOCATE_STR
+			cpi		r18,-1
+			breq	cmd_get_VAR_NOT_FOUND
+			; Переменная найдена!
+			sts		VAR_ID,r18		; сохраняем ID найденной переменной
+			movw	XL,YL
+			rcall	STRING_TO_UART ; (IN: X)
+			ldi		r16,'='
+			rcall	uart_snt
 			; Загружаем адрес таблицы
 			ldi		ZL,low(VAR_TABLE*2)
 			ldi		ZH,high(VAR_TABLE*2)
@@ -203,55 +222,57 @@ cmd_get_VAR_FOUND:
 			ldi		XH,high(STRING)
 			rcall	STRING_TO_UART ; (IN: X)
 			rcall	UART_LF_CR
+cmd_get_success:
 			clr		r13
 			ret
-
-
-
-;-----------------------------------------------------------------------------
-; Определить переменную
-; Ищет переменную среди известных
-; Записывает в VAR_ID идентификатор обнаруженной переменной
-; 
-; Вызовы: STR_CMP
-; Используются: r0*, r1*, r13*, r16*, r18*, r24*, r25*, X*, Y*, Z*
-; Вход: Y - указатель на имя полученной переменной
-; Выход: VAR_ID, r13
-;        r13 = 0 - ok
-;        r13 = 2 - неизвестная команда
-;-----------------------------------------------------------------------------
-.equ	VAR_COUNT     = 6			; кол-во команд. Увеличить при добавлении новых!
-DEFINE_VAR:
-			clr		r18			; счетчик ID переменных
-			movw	r24,YL
-DEF_VAR_LOOP:
-			ldi		ZL,low(VAR_TABLE*2)
-			ldi		ZH,high(VAR_TABLE*2)
-			mov		r0,r18
-			ldi		r16,4	; строка из 4 байт
-			mul		r0,r16
-			add		ZL,r0
-			adc		ZH,r1
-			lpm		YL,Z+
-			lpm		YH,Z
-			movw	ZL,YL
-			movw	XL,r24
-			rcall	STR_CMP
-			tst		r16				; результат проверки
-			breq	VAR_FOUND		; если равны - переходим
-			inc		r18				; если не равны, увеличиваем счетчик комманд
-			cpi		r18,VAR_COUNT	; не кончился ли список команд?
-			brne	DEF_VAR_LOOP	; нет, не кончился, еще итерация
-			rjmp	VAR_NOT_FOUND	; кончился, команда не найдена
-VAR_FOUND:
-			sts		VAR_ID,r18		; сохраняем ID найденной команды
-			clr		r13		; статус успеха
-			ret
-VAR_NOT_FOUND:
-			; команда не найдена
-			ldi		r16,4		; статус "некорректное значение аргумента"
+cmd_get_VAR_NOT_FOUND:
+			ldi		r16,4	; код ошибки: "некорректное значение аргумента"
 			mov		r13,r16
 			ret
+
+
+;------------------------------------------------------------------------------
+; Получение всех переменных
+; вывод значений переменных в терминал
+;
+; Вызовы: FLASH_CONST_TO_UART, STRING_TO_UART, UART_LF_CR, uart_snt
+; Используются: r16*, r17*, r19*, r24*, r25*, X*, Y*, Z*
+; Вход: VAR_TABLE
+;       r19 - количество элементов
+; Выход: 
+;------------------------------------------------------------------------------
+GET_ALL:
+			ldi		r24,low(VAR_TABLE*2)
+			ldi		r25,high(VAR_TABLE*2)
+			ldi		r19,VAR_COUNT
+GET_ALL_LOOP:
+			movw	ZL,r24
+			; Извлекаем адрес имени переменной
+			lpm		r16,Z+
+			lpm		r17,Z+
+			; Извлекаем адрес значения переменной
+			lpm		YL,Z+
+			lpm		YH,Z
+			movw	ZL,r16
+			rcall	FLASH_CONST_TO_UART ; (IN: Z)
+			ldi		r16,'='
+			rcall	uart_snt
+			; Извлекаем значение
+			ld		XL,Y+
+			ld		XH,Y
+			ldi		YL,low(STRING)
+			ldi		YH,high(STRING)
+			rcall	DEC_TO_STR5 ; (IN: X; OUT: Y)
+			ldi		XL,low(STRING)
+			ldi		XH,high(STRING)
+			rcall	STRING_TO_UART ; (IN: X)
+			rcall	UART_LF_CR
+			adiw	r24,4
+			dec		r19
+			brne	GET_ALL_LOOP
+			ret
+
+
 
 
 
@@ -281,7 +302,7 @@ cmd_get_const:				.db "get",0
 ;cmd_vah_const:				.db "vah",0
 ;cmd_start_const:			.db "start",0
 meow_const:					.db "Meow! ^_^",0
-clear_seq_const:			.db 27, "[", "H", 27, "[", "2J",0
+clear_seq_const:			.db 27, "[", "H", 27, "[", "2", "J",0
 
 ; Имена переменных
 IVC_DAC_START_var_name:		.db "IVC_DAC_START",0
@@ -290,6 +311,7 @@ IVC_DAC_STEP_var_name:		.db "IVC_DAC_STEP",0,0
 CH0_DELTA_var_name:			.db "CH0_DELTA",0
 ADC_V_REF_var_name:			.db "ADC_V_REF",0
 ACS712_KI_var_name:			.db "ACS712_KI",0
+ALL_const:					.db "ALL",0
 
 ; Таблица адресов имен команд и адресов подпрограмм
 CMD_TABLE:
