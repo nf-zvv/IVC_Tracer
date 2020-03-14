@@ -181,8 +181,8 @@ cmd_get_next:
 			ret
 cmd_get_VAR_FOUND:
 			; Загружаем адрес таблицы
-			ldi		ZL,low(CMD_TABLE*2)
-			ldi		ZH,high(CMD_TABLE*2)
+			ldi		ZL,low(VAR_TABLE*2)
+			ldi		ZH,high(VAR_TABLE*2)
 			lds		r0,VAR_ID			; загружаем ID переменной
 			; Добавляем смещение
 			ldi		r16,4
@@ -199,7 +199,8 @@ cmd_get_VAR_FOUND:
 			ldi		YL,low(STRING)
 			ldi		YH,high(STRING)
 			rcall	DEC_TO_STR5 ; (IN: X; OUT: Y)
-			movw	XL,YL
+			ldi		XL,low(STRING)
+			ldi		XH,high(STRING)
 			rcall	STRING_TO_UART ; (IN: X)
 			rcall	UART_LF_CR
 			clr		r13

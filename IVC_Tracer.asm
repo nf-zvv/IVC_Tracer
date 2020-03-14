@@ -180,7 +180,7 @@ IVC_DAC_STEP:	.byte	2
 ; Калибровка
 CH0_DELTA:		.byte	2
 ADC_V_REF:		.byte	2
-ACS712_KI:		.byte	1
+ACS712_KI:		.byte	2
 ;------------------------
 ; Zero-ended string
 STRING:			.byte	30
@@ -383,7 +383,7 @@ EEPROM_INIT:
 			EEPROM_WRITE_WORD E_IVC_DAC_STEP,Default_IVC_DAC_STEP
 			EEPROM_WRITE_WORD E_CH0_DELTA,Default_CH0_DELTA
 			EEPROM_WRITE_WORD E_ADC_V_REF,Default_ADC_V_REF
-			EEPROM_WRITE_BYTE E_ACS712_KI,Default_ACS712_KI
+			EEPROM_WRITE_WORD E_ACS712_KI,Default_ACS712_KI
 			ret
 
 ;------------------------------------------------------------------------------
@@ -396,7 +396,7 @@ EEPROM_RESTORE_VAR:
 			EEPROM_READ_WORD E_IVC_DAC_STEP,IVC_DAC_STEP
 			EEPROM_READ_WORD E_CH0_DELTA,CH0_DELTA
 			EEPROM_READ_WORD E_ADC_V_REF,ADC_V_REF
-			EEPROM_READ_BYTE E_ACS712_KI,ACS712_KI
+			EEPROM_READ_WORD E_ACS712_KI,ACS712_KI
 			ret
 
 ;==============================================================================
