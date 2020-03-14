@@ -147,15 +147,46 @@ cmd_set_max_arg_tst:
 			breq	cmd_set_next
 			rjmp	cmd_invalid_arg_count
 cmd_set_next:
-			; надо написать подпрограмму, аналогичную DEFINE_CMD
-			; дл€ распознавани€ переменной
-			; —оздать массив адресов переменных
-			; Ќо ведь переменные итак лежат в пам€ти друг за другом
-			; «на€ адрес первой переменной можно получить доступ к остальным прибавив смещение
-			; ’орошо. Ќо как быть с однобайтовой переменной?
-			; ¬сЄ равно нужен список имен переменных во Flash, дл€ того, 
-			; чтобы сравнивать с ним полученное по UART им€
-			; Ќадо сделать все переменные двухбайтовыми, чтобы был универсальный доступ
+			ldi		r16,1			; берем первый аргумент
+			rcall	GET_ARGUMENT	; (Y - pointer to zero ending argument string)
+			movw	XL,YL
+			ldi		ZL,low(VAR_TABLE*2)
+			ldi		ZH,high(VAR_TABLE*2)
+			ldi		r19,VAR_COUNT
+			rcall	LOCATE_STR
+			cpi		r18,-1
+			breq	cmd_set_error_arg
+			; ѕеременна€ найдена!
+			sts		VAR_ID,r18		; сохран€ем ID найденной переменной
+			ldi		r16,2			; берем второй аргумент
+			rcall	GET_ARGUMENT	; (OUT: Y - pointer to zero-ended argument string)
+			rcall	STR_TO_UINT16	; (IN: Y; OUT: r25:r24)
+			tst		r13
+			brne	cmd_set_error_num
+			; «агружаем адрес таблицы
+			ldi		ZL,low(VAR_TABLE*2)
+			ldi		ZH,high(VAR_TABLE*2)
+			lds		r0,VAR_ID			; загружаем ID переменной
+			; ƒобавл€ем смещение
+			ldi		r16,4
+			mul		r0,r16
+			add		ZL,r0
+			adc		ZH,r1
+			adiw	ZL,2	; позиционируемс€ на адрес переменной в RAM
+			lpm		XL,Z+
+			lpm		XH,Z	; теперь X указывает на значение переменной в RAM
+			; сохран€ем второй аргумент по найденному адресу
+			st		X+,r24
+			st		X,r25
+			clr		r13
+			ret
+cmd_set_error_arg:
+			ldi		r16,4	; код ошибки: "некорректное значение аргумента"
+			mov		r13,r16
+			ret
+cmd_set_error_num:
+			ldi		r16,8	; код ошибки: "некорректное число"
+			mov		r13,r16
 			ret
 
 

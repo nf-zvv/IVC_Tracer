@@ -58,12 +58,6 @@ UART_RX_PARSE:
 			breq	SPLIT_LINE_OK
 			rjmp	PRINT_ERROR
 SPLIT_LINE_OK:
-			; === Debug ===
-			ldi		XL,low(CMDLINE)
-			ldi		XH,high(CMDLINE)
-			rcall	STRING_TO_UART
-			rcall	UART_LF_CR
-			; =============
 			rcall	DEFINE_CMD
 			tst		r13
 			breq	DEFINE_CMD_OK
@@ -87,6 +81,7 @@ DEFINE_CMD_OK:
 ;   5 - слишком много аргументов
 ;   6 - отсутствует аргумент
 ;   7 - неизвестная ошибка
+;   8 - некорректное число
 ; 255 - ничего не выводить
 ; 
 ; Вызовы: 
@@ -137,15 +132,22 @@ error_6:
 			ldi		ZH,high(no_arguments_const*2)
 			rjmp	print_error_
 error_7:
-			cpi		r16,6
-			brne	error_255
+			cpi		r16,7
+			brne	error_8
 			ldi		ZL,low(unknown_error_const*2)
 			ldi		ZH,high(unknown_error_const*2)
+			rjmp	print_error_
+error_8:
+			cpi		r16,8
+			brne	error_255
+			ldi		ZL,low(invalid_num_param_const*2)
+			ldi		ZH,high(invalid_num_param_const*2)
 			rjmp	print_error_
 error_255:
 			rjmp	PRINT_ERROR_EXIT
 print_error_:
 			rcall	FLASH_CONST_TO_UART
+			rcall	UART_LF_CR
 PRINT_ERROR_EXIT:
 			ret
 
@@ -237,6 +239,7 @@ enter_rcv:
 			rjmp	SPLIT_LINE_LOOP
 underline_rcv:
 			st		X+,r17
+			inc		r18			; увеличиваем счетчик
 			rjmp	SPLIT_LINE_LOOP
 SPLIT_LINE_success:
 			; иначе - enter нажат в конце командной строки
@@ -455,14 +458,15 @@ GET_ARGUMENT:
 ; Constants
 ; 
 ;------------------------------------------------------------------------------
-unknown_cmd_const:			.db "Unknown command",10,13,0
-SPLIT_LINE_fail_const:		.db "Split arguments failed",10,13,0,0
-cmd_error_const:			.db "Command error",10,13,0
-invalid_argument_const:		.db "Invalid argument",10,13,0,0
-invalid_arg_count_const:	.db "Invalid argument count",10,13,0,0
-too_many_arguments_const:	.db "Too many arguments",10,13,0,0
-no_arguments_const:			.db "No arguments",10,13,0,0
-unknown_error_const:		.db "Unknown error",10,13,0
+unknown_cmd_const:			.db "Unknown command",0
+SPLIT_LINE_fail_const:		.db "Split arguments failed",0,0
+cmd_error_const:			.db "Command error",0
+invalid_argument_const:		.db "Invalid argument",0,0
+invalid_arg_count_const:	.db "Invalid argument count",0,0
+too_many_arguments_const:	.db "Too many arguments",0,0
+no_arguments_const:			.db "No arguments",0,0
+unknown_error_const:		.db "Unknown error",0
+invalid_num_param_const:	.db "Invalid numeric parameter",0
 
 #endif  /* _CMD_ASM_ */
 
