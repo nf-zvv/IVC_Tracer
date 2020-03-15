@@ -22,7 +22,7 @@
 #ifndef _CMD_FUNC_ASM_
 #define _CMD_FUNC_ASM_
 
-.equ	VAR_COUNT     = 6			; кол-во переменных (для команд SET и GET)
+.equ	VAR_COUNT     = 7			; кол-во переменных (для команд SET и GET)
 
 .dseg
 VAR_ID:		.byte 1
@@ -304,6 +304,14 @@ GET_ALL_LOOP:
 			ret
 
 
+;------------------------------------------------------------------------------
+; Запуск процесса автоматического снятия ВАХ
+; Результаты выдаются в терминал
+;------------------------------------------------------------------------------
+cmd_start:
+			rcall	BTN_LONG_PRESS_EVENT
+			clr		r13
+			ret
 
 
 
@@ -331,7 +339,7 @@ cmd_get_const:				.db "get",0
 ;cmd_adc2_const:				.db "adc2",0,0
 ;cmd_dac_const:				.db "dac",0
 ;cmd_vah_const:				.db "vah",0
-;cmd_start_const:			.db "start",0
+cmd_start_const:			.db "start",0
 meow_const:					.db "Meow! ^_^",0
 clear_seq_const:			.db 27, "[", "H", 27, "[", "2", "J",0
 
@@ -352,6 +360,7 @@ CMD_TABLE:
 .db low(cmd_meow_const*2),  high(cmd_meow_const*2),  low(cmd_meow),  high(cmd_meow)
 .db low(cmd_set_const*2),   high(cmd_set_const*2),   low(cmd_set),   high(cmd_set)
 .db low(cmd_get_const*2),   high(cmd_get_const*2),   low(cmd_get),   high(cmd_get)
+.db low(cmd_start_const*2), high(cmd_start_const*2), low(cmd_start), high(cmd_start)
 
 ; Таблица адресов имен переменных во Flash и адресов значений в RAM
 VAR_TABLE:
