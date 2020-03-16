@@ -178,6 +178,10 @@ cmd_set_next:
 			; сохраняем второй аргумент по найденному адресу
 			st		X+,r24
 			st		X,r25
+			; Выводим значение в терминал
+			rcall	GET_VAR_KEY_VAL ; (IN: VAR_ID)
+			; Сохраняем в EEPROM
+			rcall	EEPROM_SAVE_CALIBRATIONS
 			clr		r13
 			ret
 cmd_set_error_arg:
@@ -198,7 +202,7 @@ cmd_get:
 			lds		r16,ARG_COUNT		; кол-во аргументов
 			tst		r16
 			brne	cmd_get_max_arg_tst
-			rjmp	cmd_no_args	; нет аргументов
+			rjmp	cmd_get_all	; нет аргументов - выдаем все переменные
 cmd_get_max_arg_tst:
 			cpi		r16,1
 			breq	cmd_get_next
@@ -213,8 +217,9 @@ cmd_get_next:
 			rcall	STR_CMP
 			tst		r16				; результат проверки
 			brne	cmd_get_single_var
+cmd_get_all:
 			; Выдаём все переменные
-			rcall	GET_ALL
+			rcall	GET_ALL_VARS
 			rjmp	cmd_get_success
 cmd_get_single_var:
 			movw	XL,YL
@@ -263,20 +268,30 @@ cmd_get_VAR_NOT_FOUND:
 
 
 ;------------------------------------------------------------------------------
+; Запуск процесса автоматического снятия ВАХ
+; Результаты выдаются в терминал
+;------------------------------------------------------------------------------
+cmd_start:
+			rcall	BTN_LONG_PRESS_EVENT
+			clr		r13
+			ret
+
+
+;------------------------------------------------------------------------------
 ; Получение всех переменных
 ; вывод значений переменных в терминал
 ;
-; Вызовы: FLASH_CONST_TO_UART, STRING_TO_UART, UART_LF_CR, uart_snt
+; Вызовы: FLASH_CONST_TO_UART, STRING_TO_UART, UART_LF_CR, uart_snt, DEC_TO_STR5
 ; Используются: r16*, r17*, r19*, r24*, r25*, X*, Y*, Z*
 ; Вход: VAR_TABLE
 ;       r19 - количество элементов
 ; Выход: 
 ;------------------------------------------------------------------------------
-GET_ALL:
+GET_ALL_VARS:
 			ldi		r24,low(VAR_TABLE*2)
 			ldi		r25,high(VAR_TABLE*2)
 			ldi		r19,VAR_COUNT
-GET_ALL_LOOP:
+GET_ALL_VARS_LOOP:
 			movw	ZL,r24
 			; Извлекаем адрес имени переменной
 			lpm		r16,Z+
@@ -300,19 +315,205 @@ GET_ALL_LOOP:
 			rcall	UART_LF_CR
 			adiw	r24,4
 			dec		r19
-			brne	GET_ALL_LOOP
+			brne	GET_ALL_VARS_LOOP
 			ret
 
 
 ;------------------------------------------------------------------------------
-; Запуск процесса автоматического снятия ВАХ
-; Результаты выдаются в терминал
+; Вывод пары "имя=значение" переменной в UART
+;
+;
+; Вызовы: FLASH_CONST_TO_UART, STRING_TO_UART, UART_LF_CR, uart_snt, DEC_TO_STR5
+; Используются: r0*, r1*, r16*, r17*, X*, Y*, Z*
+; Вход: VAR_ID
+; Выход: 
 ;------------------------------------------------------------------------------
-cmd_start:
-			rcall	BTN_LONG_PRESS_EVENT
-			clr		r13
+GET_VAR_KEY_VAL:
+			; Загружаем адрес таблицы
+			ldi		ZL,low(VAR_TABLE*2)
+			ldi		ZH,high(VAR_TABLE*2)
+			lds		r0,VAR_ID			; загружаем ID переменной
+			; Добавляем смещение
+			ldi		r16,4
+			mul		r0,r16
+			add		ZL,r0
+			adc		ZH,r1
+			; Извлекаем адрес имени переменной
+			lpm		r16,Z+
+			lpm		r17,Z+
+			; Извлекаем адрес значения переменной
+			lpm		YL,Z+
+			lpm		YH,Z
+			movw	ZL,r16
+			rcall	FLASH_CONST_TO_UART ; (IN: Z)
+			ldi		r16,'='
+			rcall	uart_snt
+			; Извлекаем значение
+			ld		XL,Y+
+			ld		XH,Y
+			ldi		YL,low(STRING)
+			ldi		YH,high(STRING)
+			rcall	DEC_TO_STR5 ; (IN: X; OUT: Y)
+			ldi		XL,low(STRING)
+			ldi		XH,high(STRING)
+			rcall	STRING_TO_UART ; (IN: X)
+			rcall	UART_LF_CR
 			ret
 
+;------------------------------------------------------------------------------
+; Сохранение переменных в EEPROM
+; 
+; С целью экономии числа перезаписей EEPROM добавлена проверка перед записью
+;------------------------------------------------------------------------------
+EEPROM_SAVE_CALIBRATIONS:
+			; DAC_STEP
+			ldi		r16,low(E_DAC_STEP+0)
+			ldi		r17,high(E_DAC_STEP+0)
+			rcall	EERead
+			lds		r19,DAC_STEP+0
+			cp		r18,r19
+			breq	test_next_byte_1
+			mov		r18,r19
+			rcall	EEWrite
+test_next_byte_1:
+			ldi		r16,low(E_DAC_STEP+1)
+			ldi		r17,high(E_DAC_STEP+1)
+			rcall	EERead
+			lds		r19,DAC_STEP+1
+			cp		r18,r19
+			breq	test_next_byte_2
+			mov		r18,r19
+			rcall	EEWrite
+test_next_byte_2:
+			; IVC_DAC_START
+			ldi		r16,low(E_IVC_DAC_START+0)
+			ldi		r17,high(E_IVC_DAC_START+0)
+			rcall	EERead
+			lds		r19,IVC_DAC_START+0
+			cp		r18,r19
+			breq	test_next_byte_3
+			mov		r18,r19
+			rcall	EEWrite
+test_next_byte_3:
+			ldi		r16,low(E_IVC_DAC_START+1)
+			ldi		r17,high(E_IVC_DAC_START+1)
+			rcall	EERead
+			lds		r19,IVC_DAC_START+1
+			cp		r18,r19
+			breq	test_next_byte_4
+			mov		r18,r19
+			rcall	EEWrite
+test_next_byte_4:
+			; IVC_DAC_END
+			ldi		r16,low(E_IVC_DAC_END+0)
+			ldi		r17,high(E_IVC_DAC_END+0)
+			rcall	EERead
+			lds		r19,IVC_DAC_END+0
+			cp		r18,r19
+			breq	test_next_byte_5
+			mov		r18,r19
+			rcall	EEWrite
+test_next_byte_5:
+			ldi		r16,low(E_IVC_DAC_END+1)
+			ldi		r17,high(E_IVC_DAC_END+1)
+			rcall	EERead
+			lds		r19,IVC_DAC_END+1
+			cp		r18,r19
+			breq	test_next_byte_6
+			mov		r18,r19
+			rcall	EEWrite
+test_next_byte_6:
+			; IVC_DAC_STEP
+			ldi		r16,low(E_IVC_DAC_STEP+0)
+			ldi		r17,high(E_IVC_DAC_STEP+0)
+			rcall	EERead
+			lds		r19,IVC_DAC_STEP+0
+			cp		r18,r19
+			breq	test_next_byte_7
+			mov		r18,r19
+			rcall	EEWrite
+test_next_byte_7:
+			ldi		r16,low(E_IVC_DAC_STEP+1)
+			ldi		r17,high(E_IVC_DAC_STEP+1)
+			rcall	EERead
+			lds		r19,IVC_DAC_STEP+1
+			cp		r18,r19
+			breq	test_next_byte_8
+			mov		r18,r19
+			rcall	EEWrite
+test_next_byte_8:
+			; CH0_DELTA
+			ldi		r16,low(E_CH0_DELTA+0)
+			ldi		r17,high(E_CH0_DELTA+0)
+			rcall	EERead
+			lds		r19,CH0_DELTA+0
+			cp		r18,r19
+			breq	test_next_byte_9
+			mov		r18,r19
+			rcall	EEWrite
+test_next_byte_9:
+			ldi		r16,low(E_CH0_DELTA+1)
+			ldi		r17,high(E_CH0_DELTA+1)
+			rcall	EERead
+			lds		r19,CH0_DELTA+1
+			cp		r18,r19
+			breq	test_next_byte_10
+			mov		r18,r19
+			rcall	EEWrite
+test_next_byte_10:
+			; ADC_V_REF
+			ldi		r16,low(E_ADC_V_REF+0)
+			ldi		r17,high(E_ADC_V_REF+0)
+			rcall	EERead
+			lds		r19,ADC_V_REF+0
+			cp		r18,r19
+			breq	test_next_byte_11
+			mov		r18,r19
+			rcall	EEWrite
+test_next_byte_11:
+			ldi		r16,low(E_ADC_V_REF+1)
+			ldi		r17,high(E_ADC_V_REF+1)
+			rcall	EERead
+			lds		r19,ADC_V_REF+1
+			cp		r18,r19
+			breq	test_next_byte_12
+			mov		r18,r19
+			rcall	EEWrite
+test_next_byte_12:
+			; ACS712_KI
+			ldi		r16,low(E_ACS712_KI)
+			ldi		r17,high(E_ACS712_KI)
+			rcall	EERead
+			lds		r19,ACS712_KI
+			cp		r18,r19
+			breq	test_next_byte_13
+			mov		r18,r19
+			rcall	EEWrite
+test_next_byte_13:
+			; RESDIV_KU
+			;ldi		r16,low(E_RESDIV_KU)
+			;ldi		r17,high(E_RESDIV_KU)
+			;rcall	EERead
+			;lds		r19,RESDIV_KU
+			;cp		r18,r19
+			;breq	test_next_byte_14
+			;mov		r18,r19
+			;rcall	EEWrite
+test_next_byte_14:
+			ret
+
+
+
+; === Мысль ===
+; 16.03.2020
+; Сделать отдельные подпрограммы:
+; - поиск переменной по имени (на выходе VAR_ID)
+; - получение имени по VAR_ID (на выходе указатель на zero-ended строку)
+; - получение значения по VAR_ID (на выходе двухбайтовое значение)
+; - установка нового значения по VAR_ID
+; - получение пары "имя=значение" по VAR_ID (вывод в терминал)
+; Добавить адреса EEPROM в таблицу переменных,
+; чтобы потом сохранять/считывать также по VAR_ID
 
 
 ;------------------------------------------------------------------------------
@@ -344,6 +545,7 @@ meow_const:					.db "Meow! ^_^",0
 clear_seq_const:			.db 27, "[", "H", 27, "[", "2", "J",0
 
 ; Имена переменных
+DAC_STEP_var_name:			.db "DAC_STEP",0,0
 IVC_DAC_START_var_name:		.db "IVC_DAC_START",0
 IVC_DAC_END_var_name:		.db "IVC_DAC_END",0
 IVC_DAC_STEP_var_name:		.db "IVC_DAC_STEP",0,0
@@ -364,6 +566,7 @@ CMD_TABLE:
 
 ; Таблица адресов имен переменных во Flash и адресов значений в RAM
 VAR_TABLE:
+.db low(DAC_STEP_var_name*2),     high(DAC_STEP_var_name*2),     low(DAC_STEP),     high(DAC_STEP)
 .db low(IVC_DAC_START_var_name*2),high(IVC_DAC_START_var_name*2),low(IVC_DAC_START),high(IVC_DAC_START)
 .db low(IVC_DAC_END_var_name*2),  high(IVC_DAC_END_var_name*2),  low(IVC_DAC_END),  high(IVC_DAC_END)
 .db low(IVC_DAC_STEP_var_name*2), high(IVC_DAC_STEP_var_name*2), low(IVC_DAC_STEP), high(IVC_DAC_STEP)
