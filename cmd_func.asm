@@ -278,6 +278,52 @@ cmd_start:
 
 
 ;------------------------------------------------------------------------------
+; Получение текущего или установка нового значения ЦАП
+; 
+;------------------------------------------------------------------------------
+cmd_dac:
+			lds		r16,ARG_COUNT		; кол-во аргументов
+			tst		r16
+			brne	cmd_dac_max_arg_tst
+			rjmp	cmd_dac_show	; нет аргументов - выводим текущее значение
+cmd_dac_max_arg_tst:
+			cpi		r16,1
+			breq	cmd_dac_next
+			rjmp	cmd_too_many_args
+cmd_dac_next:
+			ldi		r16,1			; берем первый аргумент
+			rcall	GET_ARGUMENT	; (Y - pointer to zero ending argument string)
+			rcall	STR_TO_UINT16	; (IN: Y; OUT: r25:r24)
+			tst		r13
+			brne	cmd_dac_error_num
+			sts		DAC+0,r24
+			sts		DAC+1,r25
+			rcall	DAC_SET
+			rjmp	cmd_dac_success
+cmd_dac_show:
+			ldi		ZL,low(DAC_const*2)
+			ldi		ZH,high(DAC_const*2)
+			rcall	FLASH_CONST_TO_UART ; (IN: Z)
+			lds		XL,DAC+0
+			lds		XH,DAC+1
+			ldi		YL,low(STRING)
+			ldi		YH,high(STRING)
+			rcall	DEC_TO_STR5 ; (IN: X; OUT: Y)
+			ldi		XL,low(STRING)
+			ldi		XH,high(STRING)
+			rcall	STRING_TO_UART ; (IN: X)
+			rcall	UART_LF_CR
+			rjmp	cmd_dac_success
+cmd_dac_error_num:
+			ldi		r16,8	; код ошибки: "некорректное число"
+			mov		r13,r16
+			ret
+cmd_dac_success:
+			clr		r13
+			ret
+
+
+;------------------------------------------------------------------------------
 ; Получение всех переменных
 ; вывод значений переменных в терминал
 ;
@@ -535,12 +581,9 @@ cmd_echo_const:				.db "echo",0,0
 cmd_meow_const:				.db "meow",0,0
 cmd_set_const:				.db "set",0
 cmd_get_const:				.db "get",0
-;cmd_pwm_const:				.db "pwm",0
 ;cmd_adc_const:				.db "adc",0
-;cmd_adc2_const:				.db "adc2",0,0
-;cmd_dac_const:				.db "dac",0
-;cmd_vah_const:				.db "vah",0
 cmd_start_const:			.db "start",0
+cmd_dac_const:				.db "dac",0
 meow_const:					.db "Meow! ^_^",0
 clear_seq_const:			.db 27, "[", "H", 27, "[", "2", "J",0
 
@@ -552,7 +595,9 @@ IVC_DAC_STEP_var_name:		.db "IVC_DAC_STEP",0,0
 CH0_DELTA_var_name:			.db "CH0_DELTA",0
 ADC_V_REF_var_name:			.db "ADC_V_REF",0
 ACS712_KI_var_name:			.db "ACS712_KI",0
+
 ALL_const:					.db "ALL",0
+DAC_const:					.db "DAC=",0,0
 
 ; Таблица адресов имен команд и адресов подпрограмм
 CMD_TABLE:
@@ -563,6 +608,7 @@ CMD_TABLE:
 .db low(cmd_set_const*2),   high(cmd_set_const*2),   low(cmd_set),   high(cmd_set)
 .db low(cmd_get_const*2),   high(cmd_get_const*2),   low(cmd_get),   high(cmd_get)
 .db low(cmd_start_const*2), high(cmd_start_const*2), low(cmd_start), high(cmd_start)
+.db low(cmd_dac_const*2),   high(cmd_dac_const*2),   low(cmd_dac),   high(cmd_dac)
 
 ; Таблица адресов имен переменных во Flash и адресов значений в RAM
 VAR_TABLE:
