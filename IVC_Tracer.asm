@@ -155,11 +155,11 @@
 
 
 #define Default_DAC_STEP       0x0005 ; 5
-#define Default_IVC_DAC_START  0x0712 ; 1810
-#define Default_IVC_DAC_END    0x09b0 ; 2480
+#define Default_IVC_DAC_START  0x0744 ; 1860
+#define Default_IVC_DAC_END    0x092e ; 2350
 #define Default_IVC_DAC_STEP   0x000a ; 10
-#define Default_CH0_DELTA      0x09ce ; 2510
-#define Default_ADC_V_REF      0x1388 ; 5000
+#define Default_CH0_DELTA      0x09c1 ; 2497
+#define Default_ADC_V_REF      0x1372 ; 4978
 #define Default_ACS712_KI      0x00b9 ; 185
 #define Default_RESDIV_KU      0x0001 ; 1
 
@@ -1421,6 +1421,7 @@ UPDATE_ALL:
 ; Считать АЦП0, АЦП1, АЦП2 с усреднением по 16 выборкам
 			rcall	ADC_RUN
 ; значение нулевого канала АЦП (ток солнечного модуля)
+			; Костыль BEGIN
 			; Полная очистка экрана приводит к мерцаниям, поэтому
 			; проще очистить последнее знакоместо для значения 
 			; (т.к. строка м.б. переменной длины)
@@ -1429,6 +1430,7 @@ UPDATE_ALL:
 			LCD_COORD 11,0		; курсор
 			ldi		r17,' '		; пробел
 			rcall	DATA_WR		; выводим
+			; Костыль END
 			; Подготавливаем для вывода ток
 			lds		r16,ADC_CH0+1 ; Извлекаем младший байт АЦП
 			lds		r17,ADC_CH0+0 ; Извлекаем стерший байт АЦП
@@ -1457,6 +1459,16 @@ UPDATE_ALL:
 			rcall	BCD_TO_LCD_2
 
 ; значение второго канала АЦП (напряжение солнечного модуля)
+			; Костыль BEGIN
+			; Полная очистка экрана приводит к мерцаниям, поэтому
+			; проще очистить последнее знакоместо для значения 
+			; (т.к. строка м.б. переменной длины)
+			; Либо позаботиться об этом в DEC_TO_STR7,
+			; чтобы выдаваемая строка была фиксированной длины
+			LCD_COORD 11,1		; курсор
+			ldi		r17,' '		; пробел
+			rcall	DATA_WR		; выводим
+			; Костыль END
 			; Подготавливаем для вывода напряжение
 			lds		r16,ADC_CH2+1	; младший байт АЦП
 			lds		r17,ADC_CH2+0	; старший байт АЦП
@@ -1466,7 +1478,8 @@ UPDATE_ALL:
 			mov		XH,r19
 			ldi		YL,low(STRING)
 			ldi		YH,high(STRING)
-			rcall	DEC_TO_STR5
+			;rcall	DEC_TO_STR5
+			rcall	DEC_TO_STR7_VOLT
 			LCD_COORD 6,1		; курсор
 			; Выводим строку на дисплей
 			ldi		YL,low(STRING)
@@ -1538,7 +1551,7 @@ Calculate_current:
 ;------------------------------------------------------------------------------
 ; Преобразование кода АЦП в милливольты
 ; 
-; Voltage_mV = ADC_code * ADC_V_REF / 4096
+; Voltage_mV = ADC_code * ADC_V_REF / 4096 * RESDIV_KU
 ; 
 ; CALLS:
 ; USED: 
@@ -1557,6 +1570,11 @@ Calculate_voltage:
 			rcall	mul16u   ; (IN: r17:r16, r19:r18, OUT: r25:r24:r23:r22)
 			; Поделить на разрядность АЦП
 			rcall	DIV_4096 ; (IN, OUT: r25:r24:r23:r22)
+			mov		r16,r22
+			mov		r17,r23
+			lds		r18,RESDIV_KU
+			clr		r19
+			rcall	mul16u   ; (IN: r17:r16, r19:r18, OUT: r25:r24:r23:r22)
 			mov		r18,r22
 			mov		r19,r23
 			pop		r25

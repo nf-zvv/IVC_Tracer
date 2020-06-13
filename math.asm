@@ -335,7 +335,7 @@ DEC_TO_STR5_3:
 
 
 ;------------------------------------------------------------------------------
-; Convert signed number to string
+; Convert signed number to string (current version)
 ; 
 ; USED: r16*, r26*, r27*, r28*, r29*
 ; CALL: 
@@ -407,6 +407,64 @@ DEC_TO_STR7_3:
 			ST		Y+,r16		; \0 - null-terminating string
 			RET
 
+
+;------------------------------------------------------------------------------
+; Convert number to string (voltage version)
+; 
+; USED: r16*, r26*, r27*, r28*, r29*
+; CALL: 
+; IN: X - число [0..65535], [0x0000..0xFFFF]
+;     Y - pointer to null-terminating string
+; OUT: Y - pointer to null-terminating string
+;------------------------------------------------------------------------------
+DEC_TO_STR7_VOLT:
+			LDI		r16, -1
+DEC_TO_STR7_0_VOLT:
+			INC		r16
+			SUBI	r26, Low(10000)
+			SBCI	r27, High(10000)
+			BRSH	DEC_TO_STR7_0_VOLT
+			SUBI	r26, Low(-10000)
+			SBCI	r27, High(-10000)
+			tst		r16 ; проверка на незначащий ноль
+			breq	DEC_TO_STR7_SKIP_ZERO_VOLT ; отбрасываем ноль
+			SUBI	r16,-0x30	; преобразовать цифру в ASCII код
+			ST		Y+,r16		; сохранить код цифры
+DEC_TO_STR7_SKIP_ZERO_VOLT:
+			LDI		r16, -1
+DEC_TO_STR7_1_VOLT:
+			INC		r16
+			SUBI	r26, Low(1000)
+			SBCI	r27, High(1000)
+			BRSH	DEC_TO_STR7_1_VOLT
+			SUBI	r26, Low(-1000)
+			SBCI	r27, High(-1000)
+			SUBI	r16,-0x30	; преобразовать цифру в ASCII код
+			ST		Y+,r16		; сохранить код цифры
+			ldi		r16,'.'
+			ST		Y+,r16		; сохранить код разделительной точки
+			LDI		r16, -1
+DEC_TO_STR7_2_VOLT:
+			INC		r16
+			SUBI	r26, Low(100)
+			SBCI	r27, High(100)
+			BRSH	DEC_TO_STR7_2_VOLT
+			SUBI	r26, -100
+			SUBI	r16,-0x30	; преобразовать цифру в ASCII код
+			ST		Y+,r16		; сохранить код цифры
+			LDI		r16, -1
+DEC_TO_STR7_3_VOLT:
+			INC		r16
+			SUBI	r26, 10
+			BRSH	DEC_TO_STR7_3_VOLT
+			SUBI	r16,-0x30	; преобразовать цифру в ASCII код
+			ST		Y+,r16		; сохранить код цифры
+			SUBI	r26,-10
+			SUBI	r26,-0x30	; преобразовать цифру в ASCII код
+			ST		Y+,r26		; сохранить код цифры
+			CLR		r16
+			ST		Y+,r16		; \0 - null-terminating string
+			RET
 
 
 ;--------------------------------------------------------------
