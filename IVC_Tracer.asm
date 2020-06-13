@@ -160,7 +160,8 @@
 #define Default_IVC_DAC_STEP   0x000a ; 10
 #define Default_CH0_DELTA      0x09ce ; 2510
 #define Default_ADC_V_REF      0x1388 ; 5000
-#define Default_ACS712_KI      0xb9   ; 185
+#define Default_ACS712_KI      0x00b9 ; 185
+#define Default_RESDIV_KU      0x0001 ; 1
 
 ;===================================EEPROM=====================================
 .eseg
@@ -172,7 +173,8 @@ E_IVC_DAC_END:		.dw Default_IVC_DAC_END
 E_IVC_DAC_STEP:		.dw Default_IVC_DAC_STEP
 E_CH0_DELTA:		.dw Default_CH0_DELTA
 E_ADC_V_REF:		.dw Default_ADC_V_REF
-E_ACS712_KI:		.db Default_ACS712_KI
+E_ACS712_KI:		.dw Default_ACS712_KI
+E_RESDIV_KU:		.dw Default_RESDIV_KU
 
 ;====================================DATA======================================
 .dseg
@@ -191,6 +193,7 @@ IVC_DAC_STEP:	.byte	2
 CH0_DELTA:		.byte	2
 ADC_V_REF:		.byte	2
 ACS712_KI:		.byte	2
+RESDIV_KU:		.byte	2
 ;------------------------
 ; Zero-ended string
 STRING:			.byte	30
@@ -394,6 +397,7 @@ EEPROM_INIT:
 			EEPROM_WRITE_WORD E_CH0_DELTA,Default_CH0_DELTA
 			EEPROM_WRITE_WORD E_ADC_V_REF,Default_ADC_V_REF
 			EEPROM_WRITE_WORD E_ACS712_KI,Default_ACS712_KI
+			EEPROM_WRITE_WORD E_RESDIV_KU,Default_RESDIV_KU
 			ret
 
 ;------------------------------------------------------------------------------
@@ -407,6 +411,7 @@ EEPROM_RESTORE_VAR:
 			EEPROM_READ_WORD E_CH0_DELTA,CH0_DELTA
 			EEPROM_READ_WORD E_ADC_V_REF,ADC_V_REF
 			EEPROM_READ_WORD E_ACS712_KI,ACS712_KI
+			EEPROM_READ_WORD E_RESDIV_KU,RESDIV_KU
 			ret
 
 ;==============================================================================
