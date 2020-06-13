@@ -4,6 +4,16 @@
 ; (C) 2017-2020 Vitaliy Zinoviev
 ; https://github.com/nf-zvv/IVC_Tracer
 ;
+; Hardware: 
+; PinBoard II rev.3 by DiHalt
+;
+; Compile:
+; avrasm2.exe -S labels.tmp -fI -W+ie -C V2E -o IVC_Tracer.hex -d IVC_Tracer.obj
+;  -e IVC_Tracer.eep -m IVC_Tracer.map -l IVC_Tracer.lst IVC_Tracer.asm
+;
+; Burn flash via JTAG:
+; avrdude -c jtag1 -P com4 -b 115200 -p m16 -U flash:w:IVC_Tracer.hex
+;
 ; History
 ; =======
 ; 04.12.18 Заменен АЦП на MCP3204, написаны соответствующие подпрограммы
