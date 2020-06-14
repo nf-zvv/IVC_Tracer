@@ -22,7 +22,7 @@
 #ifndef _CMD_FUNC_ASM_
 #define _CMD_FUNC_ASM_
 
-.equ	VAR_COUNT     = 8			; кол-во переменных (для команд SET и GET)
+.equ	VAR_COUNT     = 9			; кол-во переменных (для команд SET и GET)
 
 .dseg
 VAR_ID:		.byte 1
@@ -546,6 +546,16 @@ test_next_byte_13:
 			mov		r18,r19
 			rcall	EEWrite
 test_next_byte_14:
+			; VAH_DELAY
+			ldi		r16,low(E_VAH_DELAY)
+			ldi		r17,high(E_VAH_DELAY)
+			rcall	EERead
+			lds		r19,VAH_DELAY
+			cp		r18,r19
+			breq	test_next_byte_15
+			mov		r18,r19
+			rcall	EEWrite
+test_next_byte_15:
 			ret
 
 
@@ -596,6 +606,7 @@ CH0_DELTA_var_name:			.db "CH0_DELTA",0
 ADC_V_REF_var_name:			.db "ADC_V_REF",0
 ACS712_KI_var_name:			.db "ACS712_KI",0
 RESDIV_KU_var_name:			.db "RESDIV_KU",0
+VAH_DELAY_var_name:			.db "VAH_DELAY",0
 
 ALL_const:					.db "ALL",0
 DAC_const:					.db "DAC=",0,0
@@ -621,6 +632,7 @@ VAR_TABLE:
 .db low(ADC_V_REF_var_name*2),    high(ADC_V_REF_var_name*2),    low(ADC_V_REF),    high(ADC_V_REF)
 .db low(ACS712_KI_var_name*2),    high(ACS712_KI_var_name*2),    low(ACS712_KI),    high(ACS712_KI)
 .db low(RESDIV_KU_var_name*2),    high(RESDIV_KU_var_name*2),    low(RESDIV_KU),    high(RESDIV_KU)
+.db low(VAH_DELAY_var_name*2),    high(VAH_DELAY_var_name*2),    low(VAH_DELAY),    high(VAH_DELAY)
 
 #endif  /* _CMD_FUNC_ASM_ */
 

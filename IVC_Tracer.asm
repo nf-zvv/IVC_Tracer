@@ -162,6 +162,7 @@
 #define Default_ADC_V_REF      0x1372 ; 4978
 #define Default_ACS712_KI      0x00b9 ; 185
 #define Default_RESDIV_KU      0x0001 ; 1
+#define Default_VAH_DELAY      0x0032 ; 50
 
 ;===================================EEPROM=====================================
 .eseg
@@ -175,6 +176,7 @@ E_CH0_DELTA:		.dw Default_CH0_DELTA
 E_ADC_V_REF:		.dw Default_ADC_V_REF
 E_ACS712_KI:		.dw Default_ACS712_KI
 E_RESDIV_KU:		.dw Default_RESDIV_KU
+E_VAH_DELAY:		.dw Default_VAH_DELAY
 
 ;====================================DATA======================================
 .dseg
@@ -194,6 +196,8 @@ CH0_DELTA:		.byte	2
 ADC_V_REF:		.byte	2
 ACS712_KI:		.byte	2
 RESDIV_KU:		.byte	2
+;------------------------
+VAH_DELAY:		.byte	2
 ;------------------------
 ; Zero-ended string
 STRING:			.byte	30
@@ -398,6 +402,7 @@ EEPROM_INIT:
 			EEPROM_WRITE_WORD E_ADC_V_REF,Default_ADC_V_REF
 			EEPROM_WRITE_WORD E_ACS712_KI,Default_ACS712_KI
 			EEPROM_WRITE_WORD E_RESDIV_KU,Default_RESDIV_KU
+			EEPROM_WRITE_WORD E_VAH_DELAY,Default_VAH_DELAY
 			ret
 
 ;------------------------------------------------------------------------------
@@ -412,6 +417,7 @@ EEPROM_RESTORE_VAR:
 			EEPROM_READ_WORD E_ADC_V_REF,ADC_V_REF
 			EEPROM_READ_WORD E_ACS712_KI,ACS712_KI
 			EEPROM_READ_WORD E_RESDIV_KU,RESDIV_KU
+			EEPROM_READ_WORD E_VAH_DELAY,VAH_DELAY
 			ret
 
 ;==============================================================================
@@ -1129,7 +1135,8 @@ VAH_LOOP:
 			sts		DAC+1,r23
 			rcall	DAC_SET
 			; 2. задержка после смены значения (для завершения перех. процессов)
-			ldi		r16,50
+			lds		r16,VAH_DELAY
+			;ldi		r16,50
 			rcall	WaitMiliseconds		; [использует регистры r16 и X]
 			; 3. считываем значение каналов АЦП
 			rcall	ADC_RUN
@@ -1276,7 +1283,7 @@ PRINT_IVC_DATA_TO_UART_LOOP:
 			mov		XH,r19
 			;ldi		YL,low(STRING)
 			;ldi		YH,high(STRING)
-			rcall	DEC_TO_STR5
+			rcall	DEC_TO_STR7_VOLT
 			; Надо удалить последний символ в строке! Там 0 стоит
 			ld		r16,-Y
 			; Конец строки
